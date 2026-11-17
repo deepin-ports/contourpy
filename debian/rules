@@ -2,6 +2,8 @@
 
 export PYBUILD_NAME=contourpy
 export PYBUILD_TEST_ARGS=tests/test*.py -k 'not test_cppcheck and not test_mypy'
+# deepin: temporary, tests import matplotlib, which depends on contourpy
+export PYBUILD_DISABLE=test
 
 %:
 	dh $@ --buildsystem=pybuild

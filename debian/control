@@ -10,7 +10,6 @@ Build-Depends:
  dh-sequence-python3,
  pybuild-plugin-pyproject,
  python3-all-dev,
- python3-matplotlib <!nocheck>,
  python3-mesonpy,
  python3-numpy <!nocheck>,
  python3-pkgconfig,
