@@ -3,18 +3,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast, overload
 
 import numpy as np
+from numpy.testing import assert_allclose, assert_array_equal
 
 from contourpy import FillType, LineType, max_threads
+from contourpy.types import code_dtype, offset_dtype, point_dtype
 
 if TYPE_CHECKING:
     import numpy.typing as npt
 
     import contourpy._contourpy as cpy
-
-
-point_dtype = np.float64
-code_dtype = np.uint8
-offset_dtype = np.uint32
 
 
 def all_class_names() -> list[str]:
@@ -60,10 +57,12 @@ def all_names_and_line_types() -> list[tuple[str, LineType]]:
         ("serial", LineType.SeparateCode),
         ("serial", LineType.ChunkCombinedCode),
         ("serial", LineType.ChunkCombinedOffset),
+        ("serial", LineType.ChunkCombinedNan),
         ("threaded", LineType.Separate),
         ("threaded", LineType.SeparateCode),
         ("threaded", LineType.ChunkCombinedCode),
         ("threaded", LineType.ChunkCombinedOffset),
+        ("threaded", LineType.ChunkCombinedNan),
     ]
 
 
@@ -92,6 +91,7 @@ def all_line_types_str_value() -> list[tuple[str, int]]:
         ("SeparateCode", 102),
         ("ChunkCombinedCode", 103),
         ("ChunkCombinedOffset", 104),
+        ("ChunkCombinedNan", 105),
     ]
 
 
@@ -107,13 +107,15 @@ def thread_counts() -> list[int]:
     return list(filter(lambda n: n <= max(max_threads(), 1), thread_counts))
 
 
-def assert_point_array(points: cpy.PointArray) -> int:
+def assert_point_array(points: cpy.PointArray, allow_nan: bool = False) -> int:
     assert isinstance(points, np.ndarray)
     assert points.dtype == point_dtype
     assert points.ndim == 2
     assert points.shape[1] == 2
-    npoints = points.shape[0]
+    npoints = len(points)
     assert npoints >= 1
+    if not allow_nan:
+        assert not np.any(np.isnan(points))
     return npoints
 
 
@@ -283,18 +285,47 @@ def assert_lines(lines: cpy.LineReturn, line_type: LineType) -> None:
                     assert offsets_or_none is not None
                 npoints = assert_point_array(lines_or_none)
                 assert_offset_array(offsets_or_none, npoints)
+    elif line_type == LineType.ChunkCombinedNan:
+        if TYPE_CHECKING:
+            lines = cast(cpy.LineReturn_ChunkCombinedNan, lines)
+        assert isinstance(lines, tuple) and len(lines) == 1
+        assert isinstance(lines[0], list)
+        for lines_or_none in lines[0]:
+            if lines_or_none is not None:
+                assert_point_array(lines_or_none, allow_nan=True)
     else:
         raise RuntimeError(f"Unexpected line_type {line_type}")
 
 
+def assert_equal_recursive(any1: Any, any2: Any) -> None:
+    assert type(any1) is type(any2)
+    if any1 is None:
+        assert any2 is None
+    elif isinstance(any1, list | tuple):
+        assert type(any1) is type(any2)
+        assert len(any1) == len(any2)
+        for item1, item2 in zip(any1, any2):
+            assert_equal_recursive(item1, item2)
+    elif isinstance(any1, np.ndarray):
+        assert any1.dtype == any2.dtype
+        if any1.dtype == np.float64:
+            assert_allclose(any1, any2)
+        else:
+            assert_array_equal(any1, any2)
+    else:
+        raise NotImplementedError
+
+
 @overload
-def sort_by_first_xy(lines: list[cpy.PointArray]) -> list[cpy.PointArray]: ...
+def sort_by_first_xy(lines: list[cpy.PointArray]) -> list[cpy.PointArray]:
+    ...
 
 
 @overload
 def sort_by_first_xy(
     lines: list[cpy.PointArray], others: list[npt.NDArray[Any]],
-) -> tuple[list[cpy.PointArray], list[npt.NDArray[Any]]]: ...
+) -> tuple[list[cpy.PointArray], list[npt.NDArray[Any]]]:
+    ...
 
 
 def sort_by_first_xy(

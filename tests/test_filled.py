@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import reduce
+from itertools import pairwise
 from operator import add
 from typing import TYPE_CHECKING, cast
 
@@ -8,7 +9,7 @@ import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 import pytest
 
-from contourpy import FillType, contour_generator
+from contourpy import FillType, contour_generator, max_threads
 from contourpy.util.data import random, simple
 
 from . import util_test
@@ -36,13 +37,36 @@ def xyz_chunk_test() -> tuple[cpy.CoordinateArray, ...]:
 @pytest.mark.parametrize("name", util_test.all_names())
 def test_filled_decreasing_levels(name: str) -> None:
     cont_gen = contour_generator(z=[[0, 1], [2, 3]], name=name, fill_type=FillType.OuterCode)
-    with pytest.raises(ValueError, match="upper and lower levels are the wrong way round"):
+    with pytest.raises(ValueError, match="upper_level must be larger than lower_level"):
         cont_gen.filled(2.0, 1.0)
 
 
+@pytest.mark.parametrize("name", util_test.all_names())
+def test_filled_nan_levels(name: str) -> None:
+    cont_gen = contour_generator(z=[[0, 1], [2, 3]], name=name, fill_type=FillType.OuterCode)
+
+    msg = r"lower_level and upper_level cannot be NaN"
+    with pytest.raises(ValueError, match=msg):
+        cont_gen.filled(0, np.nan)
+
+    with pytest.raises(ValueError, match=msg):
+        cont_gen.filled(np.nan, 0)
+
+    with pytest.raises(ValueError, match=msg):
+        cont_gen.filled(np.nan, np.nan)
+
+
+@pytest.mark.parametrize("name", util_test.all_names())
+def test_filled_identical_levels(name: str) -> None:
+    cont_gen = contour_generator(z=[[0, 1], [2, 3]], name=name, fill_type=FillType.OuterCode)
+    with pytest.raises(ValueError, match="upper_level must be larger than lower_level"):
+        cont_gen.filled(2.0, 2.0)
+
+
 @pytest.mark.image
+@pytest.mark.parametrize("multi", [False, True])
 @pytest.mark.parametrize("name, fill_type", util_test.all_names_and_fill_types())
-def test_filled_simple(name: str, fill_type: FillType) -> None:
+def test_filled_simple(name: str, fill_type: FillType, multi: bool) -> None:
     from contourpy.util.mpl_renderer import MplTestRenderer
 
     from .image_comparison import compare_images
@@ -56,16 +80,21 @@ def test_filled_simple(name: str, fill_type: FillType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    if multi:
+        multi_filled = cont_gen.multi_filled(levels)
+        renderer.multi_filled(multi_filled, fill_type)
+    else:
+        for i in range(len(levels)-1):
+            renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
     image_buffer = renderer.save_to_buffer()
 
-    compare_images(image_buffer, "filled_simple.png", f"{name}_{fill_type}")
+    compare_images(image_buffer, "filled_simple.png", f"{name}_{fill_type}_{multi}")
 
 
 @pytest.mark.image
+@pytest.mark.parametrize("multi", [False, True])
 @pytest.mark.parametrize("name, fill_type", util_test.all_names_and_fill_types())
-def test_filled_simple_chunk(name: str, fill_type: FillType) -> None:
+def test_filled_simple_chunk(name: str, fill_type: FillType, multi: bool) -> None:
     from contourpy.util.mpl_renderer import MplTestRenderer
 
     from .image_comparison import compare_images
@@ -81,12 +110,15 @@ def test_filled_simple_chunk(name: str, fill_type: FillType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    if multi:
+        renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
+    else:
+        for i in range(len(levels)-1):
+            renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
-        image_buffer, "filled_simple_chunk.png", f"{name}_{fill_type}", mean_threshold=0.12,
+        image_buffer, "filled_simple_chunk.png", f"{name}_{fill_type}_{multi}", mean_threshold=0.12,
     )
 
 
@@ -110,8 +142,7 @@ def test_filled_simple_chunk_threads(fill_type: FillType, thread_count: int) -> 
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -135,8 +166,7 @@ def test_filled_simple_no_corner_mask(name: str, fill_type: FillType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "filled_simple_no_corner_mask.png", f"{name}_{fill_type}")
@@ -160,8 +190,7 @@ def test_filled_simple_no_corner_mask_chunk(name: str, fill_type: FillType) -> N
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -191,8 +220,7 @@ def test_filled_simple_no_corner_mask_chunk_threads(fill_type: FillType, thread_
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -218,8 +246,7 @@ def test_filled_simple_corner_mask(name: str) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "filled_simple_corner_mask.png", f"{name}_{fill_type}")
@@ -244,8 +271,7 @@ def test_filled_simple_corner_mask_chunk(name: str) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -276,8 +302,7 @@ def test_filled_simple_corner_mask_chunk_threads(fill_type: FillType, thread_cou
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -303,16 +328,16 @@ def test_filled_simple_quad_as_tri(name: str) -> None:
 
     fill_type = cont_gen.fill_type
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "filled_simple_quad_as_tri.png", f"{name}")
 
 
 @pytest.mark.image
+@pytest.mark.parametrize("multi", [False, True])
 @pytest.mark.parametrize("name, fill_type", util_test.all_names_and_fill_types())
-def test_filled_random(name: str, fill_type: FillType) -> None:
+def test_filled_random(name: str, fill_type: FillType, multi: bool) -> None:
     from contourpy.util.mpl_renderer import MplTestRenderer
 
     from .image_comparison import compare_images
@@ -326,16 +351,21 @@ def test_filled_random(name: str, fill_type: FillType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    if multi:
+        multi_filled = cont_gen.multi_filled(levels)
+        renderer.multi_filled(multi_filled, fill_type)
+    else:
+        for i in range(len(levels)-1):
+            renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
     image_buffer = renderer.save_to_buffer()
 
-    compare_images(image_buffer, "filled_random.png", f"{name}_{fill_type}")
+    compare_images(image_buffer, "filled_random.png", f"{name}_{fill_type}_{multi}")
 
 
 @pytest.mark.image
+@pytest.mark.parametrize("multi", [False, True])
 @pytest.mark.parametrize("name, fill_type", util_test.all_names_and_fill_types())
-def test_filled_random_chunk(name: str, fill_type: FillType) -> None:
+def test_filled_random_chunk(name: str, fill_type: FillType, multi: bool) -> None:
     from contourpy.util.mpl_renderer import MplTestRenderer
 
     from .image_comparison import compare_images
@@ -351,8 +381,11 @@ def test_filled_random_chunk(name: str, fill_type: FillType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    if multi:
+        renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
+    else:
+        for i in range(len(levels)-1):
+            renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
     image_buffer = renderer.save_to_buffer()
 
     max_threshold = None
@@ -369,7 +402,7 @@ def test_filled_random_chunk(name: str, fill_type: FillType) -> None:
             mean_threshold = 0.19
 
     compare_images(
-        image_buffer, "filled_random_chunk.png", f"{name}_{fill_type}",
+        image_buffer, "filled_random_chunk.png", f"{name}_{fill_type}_{multi}",
         max_threshold=max_threshold, mean_threshold=mean_threshold,
     )
 
@@ -394,8 +427,7 @@ def test_filled_random_chunk_threads(fill_type: FillType, thread_count: int) -> 
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     if fill_type in (FillType.ChunkCombinedCode, FillType.ChunkCombinedOffset):
@@ -427,8 +459,7 @@ def test_filled_random_no_corner_mask(name: str, fill_type: FillType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "filled_random_no_corner_mask.png", f"{name}_{fill_type}")
@@ -452,8 +483,7 @@ def test_filled_random_no_corner_mask_chunk(name: str, fill_type: FillType) -> N
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     max_threshold = None
@@ -496,8 +526,7 @@ def test_filled_random_no_corner_mask_chunk_threads(fill_type: FillType, thread_
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     if fill_type in (FillType.ChunkCombinedCode, FillType.ChunkCombinedOffset):
@@ -530,8 +559,7 @@ def test_filled_random_corner_mask(name: str) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "filled_random_corner_mask.png", f"{name}_{fill_type}")
@@ -556,8 +584,7 @@ def test_filled_random_corner_mask_chunk(name: str) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     max_threshold = None
@@ -594,8 +621,7 @@ def test_filled_random_corner_mask_chunk_threads(fill_type: FillType, thread_cou
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -620,8 +646,7 @@ def test_filled_random_quad_as_tri(name: str) -> None:
 
     fill_type = cont_gen.fill_type
     renderer = MplTestRenderer()
-    for i in range(len(levels)-1):
-        renderer.filled(cont_gen.filled(levels[i], levels[i+1]), fill_type, color=f"C{i}")
+    renderer.multi_filled(cont_gen.multi_filled(levels), fill_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "filled_random_quad_as_tri.png", f"{name}")
@@ -727,7 +752,10 @@ def test_return_by_fill_type(
 @pytest.mark.threads
 @pytest.mark.parametrize("fill_type", FillType.__members__.values())
 @pytest.mark.parametrize("name, thread_count",
-                         [("serial", 1), ("threaded", 1), ("threaded", 2)])
+                         [("serial", 1), ("threaded", 1),
+                         pytest.param("threaded", 2,
+                            marks = pytest.mark.skipif(
+                            max_threads() <= 1, reason = "executing on unicore host"))])
 def test_return_by_fill_type_chunk(
     xyz_chunk_test: tuple[cpy.CoordinateArray, ...],
     name: str,
@@ -868,7 +896,7 @@ def test_filled_random_big(name: str, fill_type: FillType, corner_mask: bool | N
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize('seed', np.arange(10))
+@pytest.mark.parametrize("seed", np.arange(10))
 def test_filled_compare_slow(seed: int) -> None:
     x, y, z = random((1000, 1000), mask_fraction=0.05, seed=seed)
     levels = np.arange(0.0, 1.01, 0.1)
@@ -895,7 +923,7 @@ def test_filled_compare_slow(seed: int) -> None:
         code_list = filled_mpl2014[1]
         n_points = reduce(add, map(len, code_list))
         n_outers = len(code_list)
-        n_lines = reduce(add, map(lambda c: np.count_nonzero(c == 1), code_list))
+        n_lines = reduce(add, (np.count_nonzero(c == 1) for c in code_list))
 
         assert filled_serial[0][0] is not None
         assert n_points == len(filled_serial[0][0])
@@ -909,8 +937,108 @@ def test_filled_compare_slow(seed: int) -> None:
 
 @pytest.mark.parametrize("name", util_test.all_names())
 @pytest.mark.parametrize("z", [np.nan, -np.nan, np.inf, -np.inf])
-@pytest.mark.parametrize("zlevel", [0.0, np.nan, -np.nan, np.inf, -np.inf])
-def test_filled_z_nonfinite(name: str, z: float, zlevel: float) -> None:
+@pytest.mark.parametrize("lower_level", [0.0, np.inf, -np.inf])
+@pytest.mark.parametrize("upper_level", [0.0, np.inf, -np.inf])
+def test_filled_z_nonfinite(name: str, z: float, lower_level: float, upper_level: float) -> None:
     cont_gen = contour_generator(z=[[z, z], [z, z]], name=name, fill_type=FillType.OuterCode)
-    filled = cont_gen.filled(zlevel, zlevel)
-    assert filled == ([], [])
+    if lower_level >= upper_level:
+        with pytest.raises(ValueError, match="upper_level must be larger than lower_level"):
+            cont_gen.filled(lower_level, upper_level)
+    else:
+        filled = cont_gen.filled(lower_level, upper_level)
+        assert filled == ([], [])
+
+
+@pytest.mark.parametrize("name", util_test.all_names())
+def test_filled_infinite_level(name: str) -> None:
+    levels_all = [(0.5, np.inf), (-np.inf, 0.5), (-np.inf, np.inf)]
+    if name == "mpl2014":
+        expected_all = [
+            np.array([[1, 0.5], [1, 1], [0, 1], [0, 0.5], [1, 0.5]]),
+            np.array([[1, 0], [1, 0.5], [0, 0.5], [0, 0], [1, 0]]),
+            np.array([[1, 0], [1, 1], [0, 1], [0, 0], [1, 0]]),
+        ]
+    else:
+        expected_all = [
+            np.array([[0, 1], [0, 0.5], [1, 0.5], [1, 1], [0, 1]]),
+            np.array([[0, 0], [1, 0], [1, 0.5], [0, 0.5], [0, 0]]),
+            np.array([[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]),
+        ]
+
+    cont_gen = contour_generator(z=[[0, 0], [1, 1]], name=name, fill_type=FillType.OuterCode)
+    for (lower_level, upper_level), expected in zip(levels_all, expected_all):
+        filled = cont_gen.filled(lower_level, upper_level)
+        assert len(filled[0]) == 1  # Single polygon
+        points = filled[0][0]
+        assert isinstance(points, np.ndarray)
+        assert_allclose(points, expected)
+
+
+@pytest.mark.parametrize("name, fill_type", util_test.all_names_and_fill_types())
+def test_multi_filled_invalid_levels(name: str, fill_type: FillType) -> None:
+    z = [[1, 2], [3, 4]]
+    cont_gen = contour_generator(z=z, name=name, fill_type=fill_type)
+
+    with pytest.raises(ValueError, match=r"Levels array must be 1D not 2D"):
+        cont_gen.multi_filled([[1, 2]])
+
+    with pytest.raises(ValueError, match=r"Levels array must be 1D not 3D"):
+        cont_gen.multi_filled([[[1], [2]]])
+
+    with pytest.raises(ValueError, match=r"Levels array must have at least 2 elements, not 1"):
+        cont_gen.multi_filled([1])
+
+    with pytest.raises(ValueError, match=r"Levels array must have at least 2 elements, not 0"):
+        cont_gen.multi_filled([])
+
+    for levels in (
+        [0, np.nan],
+        [np.nan, 0],
+        [np.nan, np.nan],
+    ):
+        with pytest.raises(ValueError, match=r"Levels must not contain any NaN"):
+            cont_gen.multi_filled(levels)
+
+    for levels in (
+        [1.0, 1],
+        [1, 0.99],
+        [0, -np.inf],
+        [np.inf, 0],
+        [np.inf, -np.inf],
+    ):
+        with pytest.raises(ValueError, match=r"Levels must be increasing"):
+            cont_gen.multi_filled(levels)
+
+
+@pytest.mark.parametrize("name, fill_type", util_test.all_names_and_fill_types())
+@pytest.mark.parametrize("corner_mask", [None, False, True])
+def test_multi_filled_levels_type(name: str, fill_type: FillType, corner_mask: bool | None) -> None:
+    if corner_mask and name in ["mpl2005", "mpl2014"]:
+        pytest.skip()
+
+    z = random((10, 10), mask_fraction=0.0 if corner_mask is None else 0.05)[2]*4
+    cont_gen = contour_generator(z=z, name=name, corner_mask=corner_mask, fill_type=fill_type)
+    levels = [2, 3, 4]
+
+    # Reference result using filled() not multi_filled().
+    reference = [cont_gen.filled(lower, upper) for lower, upper in pairwise(levels)]
+
+    # List.
+    util_test.assert_equal_recursive(reference, cont_gen.multi_filled(list(levels)))
+
+    # Tuple.
+    util_test.assert_equal_recursive(reference, cont_gen.multi_filled(tuple(levels)))
+
+    # Numpy array of floats.
+    util_test.assert_equal_recursive(
+        reference, cont_gen.multi_filled(np.asarray(levels, dtype=np.float64)),
+    )
+
+    # Numpy array of ints.
+    util_test.assert_equal_recursive(
+        reference, cont_gen.multi_filled(np.asarray(levels, dtype=np.int64)),
+    )
+
+    # Slice of larger numpy array.
+    levels2 = np.array([1.5, 2, 2.5, 3, 3.5, 4, 4.5])
+    util_test.assert_equal_recursive(reference, cont_gen.multi_filled(levels2[1::2]))

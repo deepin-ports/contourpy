@@ -1,5 +1,11 @@
 #! /usr/bin/make -f
 
 export PYBUILD_NAME=contourpy
+export PYBUILD_TEST_ARGS=tests/test*.py -k 'not test_cppcheck and not test_mypy'
+
 %:
-	dh $@ --with python3 --buildsystem=pybuild
+	dh $@ --buildsystem=pybuild
+
+# _build_config.py differs per Python version
+override_dh_python3:
+	dh_python3 --allow-unmerged-dist-packages

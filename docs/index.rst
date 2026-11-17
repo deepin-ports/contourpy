@@ -18,7 +18,7 @@ Advantages of the new algorithm compared to Matplotlib's default algorithm of 20
 #. Supports treating quads a four triangles for more detailed contours (see :ref:`quad_as_tri`).
 #. Supports alternative forms of interpolation of z-values (currently only logarithmic) (see
    :ref:`z_interp`).
-#. Multithreaded option (this should be considered experimental) (see :ref:`threads`).
+#. Multithreaded option (see :ref:`threads`).
 
 .. toctree::
    :maxdepth: 1
@@ -27,7 +27,14 @@ Advantages of the new algorithm compared to Matplotlib's default algorithm of 20
    installation
    usage
    quickstart
-   user_guide/index
+
+.. toctree::
+   :maxdepth: 1
+   :caption: User Guide
+
+   user_guide/calculate/index
+   user_guide/manipulate/index
+   user_guide/external/index
 
 .. toctree::
    :maxdepth: 1
@@ -40,6 +47,7 @@ Advantages of the new algorithm compared to Matplotlib's default algorithm of 20
    :maxdepth: 1
    :caption: Extra Information
 
+   developer_guide
    benchmarks/index
    description
    config

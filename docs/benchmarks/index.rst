@@ -3,7 +3,7 @@
 Benchmarks
 ==========
 
-``contourpy`` uses ``asv`` (`airspeed velocity <https://asv.readthedocs.io>`_) for benchmarking.
+ContourPy uses ``asv`` (`airspeed velocity <https://asv.readthedocs.io>`_) for benchmarking.
 
 To run the entire benchmarking suite:
 
@@ -24,7 +24,7 @@ the results in a web browser using:
 For further information see the ``README.md`` document in the ``benchmarks`` directory.
 
 There follows a summary of key benchmark results taken on a 6-core Intel Core i7-10750H processor
-using Python 3.10.6 on Ubuntu 22.04 for commit ``996a72e3``.
+using Python 3.12.3 and g++ 13.2.0 on Ubuntu 24.04 for commit ``3064ab24``.
 
 .. toctree::
    :maxdepth: 1

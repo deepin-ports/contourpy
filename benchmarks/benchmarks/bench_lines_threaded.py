@@ -4,7 +4,12 @@ from contourpy import LineType, contour_generator
 
 from .bench_base import BenchBase
 from .util_bench import (
-    corner_mask_to_bool, corner_masks, datasets, line_types, problem_sizes, thread_counts,
+    corner_mask_to_bool,
+    corner_masks,
+    datasets,
+    line_types,
+    problem_sizes,
+    thread_counts,
 )
 
 
@@ -33,5 +38,4 @@ class BenchLinesThreaded(BenchBase):
             corner_mask=corner_mask_to_bool(corner_mask), total_chunk_count=total_chunk_count,
             thread_count=thread_count,
         )
-        for level in self.levels:
-            cont_gen.lines(level)
+        cont_gen.multi_lines(self.levels)

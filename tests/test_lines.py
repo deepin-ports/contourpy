@@ -6,7 +6,7 @@ import numpy as np
 from numpy.testing import assert_allclose, assert_array_equal
 import pytest
 
-from contourpy import LineType, contour_generator
+from contourpy import LineType, contour_generator, max_threads
 from contourpy.util.data import random, simple
 
 from . import util_test
@@ -113,8 +113,9 @@ def test_loop(xy_3x3: tuple[cpy.CoordinateArray, ...], name: str) -> None:
 
 
 @pytest.mark.image
+@pytest.mark.parametrize("multi", [False, True])
 @pytest.mark.parametrize("name, line_type", util_test.all_names_and_line_types())
-def test_lines_simple(name: str, line_type: LineType) -> None:
+def test_lines_simple(name: str, line_type: LineType, multi: bool) -> None:
     from contourpy.util.mpl_renderer import MplTestRenderer
 
     from .image_comparison import compare_images
@@ -128,16 +129,21 @@ def test_lines_simple(name: str, line_type: LineType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    if multi:
+        multi_lines = cont_gen.multi_lines(levels)
+        renderer.multi_lines(multi_lines, line_type)
+    else:
+        for i in range(len(levels)):
+            renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
     image_buffer = renderer.save_to_buffer()
 
-    compare_images(image_buffer, "lines_simple.png", f"{name}_{line_type}")
+    compare_images(image_buffer, "lines_simple.png", f"{name}_{line_type}_{multi}")
 
 
 @pytest.mark.image
+@pytest.mark.parametrize("multi", [False, True])
 @pytest.mark.parametrize("name, line_type", util_test.all_names_and_line_types())
-def test_lines_simple_chunk(name: str, line_type: LineType) -> None:
+def test_lines_simple_chunk(name: str, line_type: LineType, multi: bool) -> None:
     from contourpy.util.mpl_renderer import MplTestRenderer
 
     from .image_comparison import compare_images
@@ -153,11 +159,14 @@ def test_lines_simple_chunk(name: str, line_type: LineType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    if multi:
+        renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
+    else:
+        for i in range(len(levels)):
+            renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
     image_buffer = renderer.save_to_buffer()
 
-    compare_images(image_buffer, "lines_simple_chunk.png", f"{name}_{line_type}")
+    compare_images(image_buffer, "lines_simple_chunk.png", f"{name}_{line_type}_{multi}")
 
 
 @pytest.mark.image
@@ -180,8 +189,7 @@ def test_lines_simple_chunk_threads(line_type: LineType, thread_count: int) -> N
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_simple_chunk.png", f"{line_type}_{thread_count}")
@@ -203,8 +211,7 @@ def test_lines_simple_no_corner_mask(name: str, line_type: LineType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_simple_no_corner_mask.png", f"{name}_{line_type}")
@@ -228,8 +235,7 @@ def test_lines_simple_no_corner_mask_chunk(name: str, line_type: LineType) -> No
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_simple_no_corner_mask_chunk.png", f"{name}_{line_type}")
@@ -256,8 +262,7 @@ def test_lines_simple_no_corner_mask_chunk_threads(line_type: LineType, thread_c
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -282,8 +287,7 @@ def test_lines_simple_corner_mask(name: str) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_simple_corner_mask.png", f"{name}_{line_type}")
@@ -308,8 +312,7 @@ def test_lines_simple_corner_mask_chunk(name: str) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_simple_corner_mask_chunk.png", f"{name}_{line_type}")
@@ -336,8 +339,7 @@ def test_lines_simple_corner_mask_chunk_threads(line_type: LineType, thread_coun
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -360,18 +362,17 @@ def test_lines_simple_quad_as_tri(name: str) -> None:
     assert cont_gen.thread_count == 1
     assert cont_gen.quad_as_tri
 
-    line_type = cont_gen.line_type
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), cont_gen.line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_simple_quad_as_tri.png", f"{name}")
 
 
 @pytest.mark.image
+@pytest.mark.parametrize("multi", [False, True])
 @pytest.mark.parametrize("name, line_type", util_test.all_names_and_line_types())
-def test_lines_random(name: str, line_type: LineType) -> None:
+def test_lines_random(name: str, line_type: LineType, multi: bool) -> None:
     from contourpy.util.mpl_renderer import MplTestRenderer
 
     from .image_comparison import compare_images
@@ -385,16 +386,23 @@ def test_lines_random(name: str, line_type: LineType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    if multi:
+        multi_lines = cont_gen.multi_lines(levels)
+        renderer.multi_lines(multi_lines, line_type)
+    else:
+        for i in range(len(levels)):
+            renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
     image_buffer = renderer.save_to_buffer()
 
-    compare_images(image_buffer, "lines_random.png", f"{name}_{line_type}", max_threshold=103)
+    compare_images(
+        image_buffer, "lines_random.png", f"{name}_{line_type}_{multi}", max_threshold=103,
+    )
 
 
 @pytest.mark.image
+@pytest.mark.parametrize("multi", [False, True])
 @pytest.mark.parametrize("name, line_type", util_test.all_names_and_line_types())
-def test_lines_random_chunk(name: str, line_type: LineType) -> None:
+def test_lines_random_chunk(name: str, line_type: LineType, multi: bool) -> None:
     from contourpy.util.mpl_renderer import MplTestRenderer
 
     from .image_comparison import compare_images
@@ -410,18 +418,21 @@ def test_lines_random_chunk(name: str, line_type: LineType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    if multi:
+        renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
+    else:
+        for i in range(len(levels)):
+            renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
     image_buffer = renderer.save_to_buffer()
 
     max_threshold = None
     mean_threshold = None
-    if name == 'mpl2005':
+    if name == "mpl2005":
         max_threshold = 126
         mean_threshold = 0.11
 
     compare_images(
-        image_buffer, "lines_random_chunk.png", f"{name}_{line_type}",
+        image_buffer, "lines_random_chunk.png", f"{name}_{line_type}_{multi}",
         max_threshold=max_threshold, mean_threshold=mean_threshold,
     )
 
@@ -446,8 +457,7 @@ def test_lines_random_chunk_threads(line_type: LineType, thread_count: int) -> N
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -471,8 +481,7 @@ def test_lines_random_no_corner_mask(name: str, line_type: LineType) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_random_no_corner_mask.png", f"{name}_{line_type}")
@@ -499,8 +508,7 @@ def test_lines_random_no_corner_mask_chunk(name: str, line_type: LineType) -> No
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_random_no_corner_mask_chunk.png", f"{name}_{line_type}")
@@ -527,8 +535,7 @@ def test_lines_random_no_corner_mask_chunk_threads(line_type: LineType, thread_c
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -553,8 +560,7 @@ def test_lines_random_corner_mask(name: str) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_random_corner_mask.png", f"{name}_{line_type}")
@@ -579,8 +585,7 @@ def test_lines_random_corner_mask_chunk(name: str) -> None:
     assert cont_gen.thread_count == 1
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_random_corner_mask_chunk.png", f"{name}_{line_type}")
@@ -607,8 +612,7 @@ def test_lines_random_corner_mask_chunk_threads(line_type: LineType, thread_coun
     assert cont_gen.thread_count == thread_count
 
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(
@@ -631,10 +635,8 @@ def test_lines_random_quad_as_tri(name: str) -> None:
     assert cont_gen.thread_count == 1
     assert cont_gen.quad_as_tri
 
-    line_type = cont_gen.line_type
     renderer = MplTestRenderer()
-    for i in range(len(levels)):
-        renderer.lines(cont_gen.lines(levels[i]), line_type, color=f"C{i}")
+    renderer.multi_lines(cont_gen.multi_lines(levels), cont_gen.line_type)
     image_buffer = renderer.save_to_buffer()
 
     compare_images(image_buffer, "lines_random_quad_as_tri.png", f"{name}")
@@ -692,6 +694,14 @@ def test_return_by_line_type(
         assert offsets_or_none is not None
         assert points_or_none.shape == (7, 2)
         assert_array_equal(offsets_or_none, [0, 5, 7])
+    elif line_type == LineType.ChunkCombinedNan:
+        if TYPE_CHECKING:
+            lines = cast(cpy.LineReturn_ChunkCombinedNan, lines)
+        assert len(lines[0]) == 1  # Single chunk
+        points_or_none = lines[0][0]
+        assert points_or_none is not None
+        assert points_or_none.shape == (8, 2)
+        assert np.all(np.isnan(points_or_none[5, :]))
     else:
         raise RuntimeError(f"Unexpected line_type {line_type}")
 
@@ -699,7 +709,10 @@ def test_return_by_line_type(
 @pytest.mark.threads
 @pytest.mark.parametrize("line_type", LineType.__members__.values())
 @pytest.mark.parametrize("name, thread_count",
-                         [("serial", 1), ("threaded", 1), ("threaded", 2)])
+                         [("serial", 1), ("threaded", 1),
+                         pytest.param("threaded", 2,
+                            marks = pytest.mark.skipif(
+                            max_threads() <= 1, reason = "executing on unicore host"))])
 def test_return_by_line_type_chunk(
     xyz_chunk_test: tuple[cpy.CoordinateArray, ...],
     name: str,
@@ -769,19 +782,28 @@ def test_return_by_line_type_chunk(
             assert offsets_or_none is not None
             assert_allclose(points_or_none, expected[chunk])
             assert_array_equal(offsets_or_none, [0, len(expected[chunk])])
+    elif line_type == LineType.ChunkCombinedNan:
+        if TYPE_CHECKING:
+            lines = cast(cpy.LineReturn_ChunkCombinedNan, lines)
+        assert len(lines[0]) == 4
+        for chunk in range(4):
+            # Only a single line per chunk, so no nans here.
+            points_or_none = lines[0][chunk]
+            assert points_or_none is not None
+            assert_allclose(points_or_none, expected[chunk])
     else:
         raise RuntimeError(f"Unexpected line_type {line_type}")
 
 
 @pytest.mark.parametrize("name, line_type", util_test.all_names_and_line_types())
 @pytest.mark.parametrize("corner_mask", [None, False, True])
-def test_lines_random_big(name: str, line_type: LineType, corner_mask: bool) -> None:
+def test_lines_random_big(name: str, line_type: LineType, corner_mask: bool | None) -> None:
     if corner_mask and name in ["mpl2005", "mpl2014"]:
         pytest.skip()
 
     x, y, z = random((1000, 1000), mask_fraction=0.0 if corner_mask is None else 0.05)
     cont_gen = contour_generator(x, y, z, name=name, corner_mask=corner_mask, line_type=line_type)
-    levels = np.arange(0.0, 1.01, 0.1)
+    levels = np.arange(0.0, 1.01, 0.1, dtype=np.float64)
 
     assert cont_gen.line_type == line_type
     assert cont_gen.chunk_count == (1, 1)
@@ -799,3 +821,57 @@ def test_lines_z_nonfinite(name: str, z: float, zlevel: float) -> None:
     cont_gen = contour_generator(z=[[z, z], [z, z]], name=name, line_type=LineType.SeparateCode)
     lines = cont_gen.lines(zlevel)
     assert lines == ([], [])
+
+
+@pytest.mark.parametrize("name", util_test.all_names())
+def test_lines_infinite_level(name: str) -> None:
+    cont_gen = contour_generator(z=[[0, 0], [1, 1]], name=name, line_type=LineType.SeparateCode)
+    for level in (-np.inf, np.inf):
+        lines = cont_gen.lines(level)
+        assert len(lines[0]) == 0  # No lines
+
+
+@pytest.mark.parametrize("name, line_type", util_test.all_names_and_line_types())
+def test_multi_lines_invalid_levels(name: str, line_type: LineType) -> None:
+    z = [[1, 2], [3, 4]]
+    cont_gen = contour_generator(z=z, name=name, line_type=line_type)
+
+    with pytest.raises(ValueError, match=r"Levels array must be 1D not 2D"):
+        cont_gen.multi_lines([[1, 2]])
+
+    with pytest.raises(ValueError, match=r"Levels array must be 1D not 3D"):
+        cont_gen.multi_lines([[[1], [2]]])
+
+
+@pytest.mark.parametrize("name, line_type", util_test.all_names_and_line_types())
+@pytest.mark.parametrize("corner_mask", [None, False, True])
+def test_multi_lines_levels_type(name: str, line_type: LineType, corner_mask: bool | None) -> None:
+    if corner_mask and name in ["mpl2005", "mpl2014"]:
+        pytest.skip()
+
+    z = random((10, 10), mask_fraction=0.0 if corner_mask is None else 0.05)[2]*3
+    cont_gen = contour_generator(z=z, name=name, corner_mask=corner_mask, line_type=line_type)
+    levels = [2, 3]
+
+    # Reference result using lines() not multi_lines().
+    reference = [cont_gen.lines(level) for level in levels]
+
+    # List.
+    util_test.assert_equal_recursive(reference, cont_gen.multi_lines(list(levels)))
+
+    # Tuple.
+    util_test.assert_equal_recursive(reference, cont_gen.multi_lines(tuple(levels)))
+
+    # Numpy array of floats.
+    util_test.assert_equal_recursive(
+        reference, cont_gen.multi_lines(np.asarray(levels, dtype=np.float64)),
+    )
+
+    # Numpy array of ints.
+    util_test.assert_equal_recursive(
+        reference, cont_gen.multi_lines(np.asarray(levels, dtype=np.int64)),
+    )
+
+    # Slice of larger numpy array.
+    levels2 = np.array([1.5, 2, 2.5, 3, 3.5])
+    util_test.assert_equal_recursive(reference, cont_gen.multi_lines(levels2[1::2]))

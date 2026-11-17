@@ -170,11 +170,9 @@ typedef enum
 // An invalid quad edge has quad of -1.
 struct QuadEdge
 {
-    QuadEdge();
+    QuadEdge() = delete;
     QuadEdge(index_t quad_, Edge edge_);
-    bool operator<(const QuadEdge& other) const;
     bool operator==(const QuadEdge& other) const;
-    bool operator!=(const QuadEdge& other) const;
     friend std::ostream& operator<<(std::ostream& os, const QuadEdge& quad_edge);
 
     index_t quad;
@@ -184,15 +182,9 @@ struct QuadEdge
 // 2D point with x,y coordinates.
 struct XY
 {
-    XY();
+    XY() = delete;
     XY(const double& x_, const double& y_);
     bool operator==(const XY& other) const;
-    bool operator!=(const XY& other) const;
-    XY operator*(const double& multiplier) const;
-    const XY& operator+=(const XY& other);
-    const XY& operator-=(const XY& other);
-    XY operator+(const XY& other) const;
-    XY operator-(const XY& other) const;
     friend std::ostream& operator<<(std::ostream& os, const XY& xy);
 
     double x, y;
@@ -278,11 +270,11 @@ public:
         const MaskArray& mask, bool corner_mask, index_t x_chunk_size, index_t y_chunk_size);
 
     // Destructor.
-    ~Mpl2014ContourGenerator();
+    virtual ~Mpl2014ContourGenerator();
 
     // Create and return polygons for a filled contour between the two
     // specified levels.
-    py::tuple filled(const double& lower_level, const double& upper_level);
+    py::tuple filled(double lower_level, double upper_level) override;
 
     py::tuple get_chunk_count() const;  // Return (y_chunk_count, x_chunk_count)
     py::tuple get_chunk_size() const;   // Return (y_chunk_size, x_chunk_size)
@@ -291,7 +283,7 @@ public:
 
     // Create and return polygons for a line (i.e. non-filled) contour at the
     // specified level.
-    py::tuple lines(const double& level);
+    py::sequence lines(double level) override;
 
 private:
     // Typedef for following either a boundary of the domain or the interior;
@@ -335,7 +327,10 @@ private:
         Contour& contour, py::list& vertices_list, py::list& codes_list) const;
 
     // Return number of chunks that fit in the specified point_count.
-    index_t calc_chunk_count(index_t point_count, index_t chunk_size) const;
+    static index_t calc_chunk_count(index_t point_count, index_t chunk_size);
+
+    // Return actual chunk_size from specified point_count and requested chunk_size.
+    static index_t calc_chunk_size(index_t point_count, index_t chunk_size);
 
     // Append the point on the specified QuadEdge that intersects the specified
     // level to the specified ContourLine.

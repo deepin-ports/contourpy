@@ -13,29 +13,35 @@
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
 
 namespace py = pybind11;
+using namespace pybind11::literals;
 
 static contourpy::LineType mpl20xx_line_type = contourpy::LineType::SeparateCode;
 static contourpy::FillType mpl20xx_fill_type = contourpy::FillType::OuterCode;
 
-PYBIND11_MODULE(_contourpy, m) {
+PYBIND11_MODULE(_contourpy, m, py::mod_gil_not_used()) {
     m.doc() =
         "C++11 extension module wrapped using `pybind11`_.\n\n"
-        ".. note::\n"
-        "   It should not be necessary to access classes and functions in this extension module "
-        "directly. Instead, :func:`contourpy.contour_generator` should be used to create "
-        ":class:`~contourpy.ContourGenerator` objects, and the enums "
-        "(:class:`~contourpy.FillType`, :class:`~contourpy.LineType` and "
-        ":class:`~contourpy.ZInterp`) and :func:`contourpy.max_threads` function are all available "
+        "It should not be necessary to access classes and functions in this extension module "
+        "directly. Instead, :func:`~contourpy.contour_generator` should be used to create "
+        ":class:`~.ContourGenerator` objects, and the enums "
+        "(:class:`~.FillType`, :class:`~.LineType` and "
+        ":class:`~.ZInterp`) and :func:`.max_threads` function are all available "
         "in the :mod:`contourpy` module.";
 
-    m.attr("CONTOURPY_DEBUG") = CONTOURPY_DEBUG;
-    m.attr("CONTOURPY_CXX11") = CONTOURPY_CXX11;
     m.attr("__version__") = MACRO_STRINGIFY(CONTOURPY_VERSION);
 
+    // asserts are enabled if NDEBUG is 0.
+    m.attr("NDEBUG") =
+#ifdef NDEBUG
+        1;
+#else
+        0;
+#endif
+
     py::enum_<contourpy::FillType>(m, "FillType",
-        "Enum used for ``fill_type`` keyword argument in :func:`~contourpy.contour_generator`.\n\n"
+        "Enum used for ``fill_type`` keyword argument in :func:`~.contour_generator`.\n\n"
         "This controls the format of filled contour data returned from "
-        ":meth:`~contourpy.ContourGenerator.filled`.")
+        ":meth:`~.ContourGenerator.filled`.")
         .value("OuterCode", contourpy::FillType::OuterCode)
         .value("OuterOffset", contourpy::FillType::OuterOffset)
         .value("ChunkCombinedCode", contourpy::FillType::ChunkCombinedCode)
@@ -45,17 +51,19 @@ PYBIND11_MODULE(_contourpy, m) {
         .export_values();
 
     py::enum_<contourpy::LineType>(m, "LineType",
-        "Enum used for ``line_type`` keyword argument in :func:`~contourpy.contour_generator`.\n\n"
+        "Enum used for ``line_type`` keyword argument in :func:`~.contour_generator`.\n\n"
         "This controls the format of contour line data returned from "
-        ":meth:`~contourpy.ContourGenerator.lines`.")
+        ":meth:`~.ContourGenerator.lines`.\n\n"
+        "``LineType.ChunkCombinedNan`` added in version 1.2.0")
         .value("Separate", contourpy::LineType::Separate)
         .value("SeparateCode", contourpy::LineType::SeparateCode)
         .value("ChunkCombinedCode", contourpy::LineType::ChunkCombinedCode)
         .value("ChunkCombinedOffset", contourpy::LineType::ChunkCombinedOffset)
+        .value("ChunkCombinedNan", contourpy::LineType::ChunkCombinedNan)
         .export_values();
 
     py::enum_<contourpy::ZInterp>(m, "ZInterp",
-        "Enum used for ``z_interp`` keyword argument in :func:`~contourpy.contour_generator`\n\n"
+        "Enum used for ``z_interp`` keyword argument in :func:`~.contour_generator`\n\n"
         "This controls the interpolation used on ``z`` values to determine where contour lines "
         "intersect the edges of grid quads, and ``z`` values at quad centres.")
         .value("Linear", contourpy::ZInterp::Linear)
@@ -66,84 +74,147 @@ PYBIND11_MODULE(_contourpy, m) {
         "Return the maximum number of threads, obtained from "
         "``std::thread::hardware_concurrency()``.\n\n"
         "This is the number of threads used by a multithreaded ContourGenerator if the kwarg "
-        "``threads=0`` is passed to :func:`~contourpy.contour_generator`.");
+        "``threads=0`` is passed to :func:`~.contour_generator`.");
+
+    const char* chunk_count_doc = "Return tuple of (y, x) chunk counts.";
+    const char* chunk_size_doc = "Return tuple of (y, x) chunk sizes.";
+    const char* corner_mask_doc = "Return whether ``corner_mask`` is set or not.";
+    const char* create_contour_doc =
+        "Synonym for :meth:`~.ContourGenerator.lines` to provide backward compatibility "
+        "with Matplotlib.";
+    const char* create_filled_contour_doc =
+        "Synonym for :meth:`~.ContourGenerator.filled` to provide backward compatibility "
+        "with Matplotlib.";
+    const char* default_fill_type_doc =
+        "Return the default :class:`~.FillType` used by this algorithm.";
+    const char* default_line_type_doc =
+        "Return the default :class:`~.LineType` used by this algorithm.";
+    const char* fill_type_doc = "Return the :class:`~.FillType`.";
+    const char* filled_doc =
+        "Calculate and return filled contours between two levels.\n\n"
+        "Args:\n"
+        "    lower_level (float): Lower z-level of the filled contours, cannot be ``np.nan``.\n"
+        "    upper_level (float): Upper z-level of the filled contours, cannot be ``np.nan``.\n"
+        "Return:\n"
+        "    Filled contour polygons as nested sequences of numpy arrays. The exact format is "
+        "determined by the :attr:`~.ContourGenerator.fill_type` used by the ``ContourGenerator`` "
+        "and the options are explained at :ref:`fill_type`.\n\n"
+        "Raises a ``ValueError`` if ``lower_level >= upper_level`` or if\n"
+        "``lower_level`` or ``upper_level`` are ``np.nan``.\n\n"
+        "To return filled contours below a ``level`` use ``filled(-np.inf, level)``.\n"
+        "To return filled contours above a ``level`` use ``filled(level, np.inf)``";
+    const char* line_type_doc = "Return the :class:`~.LineType`.";
+    const char* lines_doc =
+        "Calculate and return contour lines at a particular level.\n\n"
+        "Args:\n"
+        "    level (float): z-level to calculate contours at.\n\n"
+        "Return:\n"
+        "    Contour lines (open line strips and closed line loops) as nested sequences of "
+        "numpy arrays. The exact format is determined by the :attr:`~.ContourGenerator.line_type` "
+        "used by the ``ContourGenerator`` and the options are explained at :ref:`line_type`.\n\n"
+        "``level`` may be ``np.nan``, ``np.inf`` or ``-np.inf``; they all return the same result "
+        "which is an empty line set.";
+    const char* multi_filled_doc =
+        "Calculate and return filled contours between multiple pairs of adjacent levels.\n\n"
+        "Args:\n"
+        "    levels (array-like of floats): z-levels to calculate filled contours between. "
+        "There must be at least 2 levels, they cannot be NaN, and each level must be larger than "
+        "the previous level.\n\n"
+        "Return:\n"
+        "    List of filled contours, one per pair of levels. The length of the returned list is "
+        "one less than ``len(levels)``. The format of returned contours is determined by the "
+        "``fill_type`` used by the ``ContourGenerator`` and the options are explained at "
+        ":ref:`fill_type`.\n\n"
+        "Raises a ``ValueError`` if ``levels`` are not increasing, or contain a NaN, or there are "
+        "fewer than 2 ``levels``.\n\n"
+        "Calling:\n\n"
+        ".. code-block:: python\n\n"
+        "    ret = cont_gen.multi_filled(levels)\n\n"
+        "is equivalent to:\n\n"
+        ".. code-block:: python\n\n"
+        "    ret = [cont_gen.filled(lower, upper) for lower, upper in zip(levels[:-1], levels[1:])]\n\n"
+        ".. versionadded:: 1.3.0";
+    const char* multi_lines_doc =
+        "Calculate and return contour lines at multiple levels.\n\n"
+        "Args:\n"
+        "    levels (array-like of floats): z-levels to calculate contours at.\n\n"
+        "Return:\n"
+        "    List of contour lines, one per level. The format of returned lines is determined by "
+        "the ``line_type`` used by the ``ContourGenerator`` and the options are explained at "
+        ":ref:`line_type`.\n\n"
+        "Calling:\n\n"
+        ".. code-block:: python\n\n"
+        "    ret = cont_gen.multi_lines(levels)\n\n"
+        "is equivalent to:\n\n"
+        ".. code-block:: python\n\n"
+        "    ret = [cont_gen.lines(level) for level in levels]\n\n"
+        ".. versionadded:: 1.3.0";
+    const char* quad_as_tri_doc = "Return whether ``quad_as_tri`` is set or not.";
+    const char* supports_corner_mask_doc =
+        "Return whether this algorithm supports ``corner_mask``.";
+    const char* supports_fill_type_doc =
+        "Return whether this algorithm supports a particular :class:`~.FillType`.";
+    const char* supports_line_type_doc =
+        "Return whether this algorithm supports a particular :class:`~.LineType`.";
+    const char* supports_quad_as_tri_doc =
+        "Return whether this algorithm supports ``quad_as_tri``.";
+    const char* supports_threads_doc =
+        "Return whether this algorithm supports the use of threads.";
+    const char* supports_z_interp_doc =
+        "Return whether this algorithm supports ``z_interp`` values other than ``ZInterp.Linear`` "
+        "which all support.";
+    const char* thread_count_doc = "Return the number of threads used.";
+    const char* z_interp_doc = "Return the ``ZInterp``.";
 
     py::class_<contourpy::ContourGenerator>(m, "ContourGenerator",
         "Abstract base class for contour generator classes, defining the interface that they all "
         "implement.")
-        .def("create_contour", [](double level) {return py::make_tuple();},
-            "Synonym for :func:`~contourpy.ContourGenerator.lines` to provide backward "
-            "compatibility with Matplotlib.")
-        .def("create_filled_contour",
-            [](double lower_level, double upper_level) {return py::make_tuple();},
-            "Synonym for :func:`~contourpy.ContourGenerator.filled` to provide backward "
-            "compatibility with Matplotlib.")
-        .def("filled", [](double lower_level, double upper_level) {return py::make_tuple();},
-            "Calculate and return filled contours between two levels.\n\n"
-            "Args:\n"
-            "    lower_level (float): Lower z-level of the filled contours.\n"
-            "    upper_level (float): Upper z-level of the filled contours.\n"
-            "Return:\n"
-            "    Filled contour polygons as one or more sequences of numpy arrays. The exact "
-            "format is determined by the ``fill_type`` used by the ``ContourGenerator``.")
-        .def("lines", [](double level) {return py::make_tuple();},
-            "Calculate and return contour lines at a particular level.\n\n"
-            "Args:\n"
-            "    level (float): z-level to calculate contours at.\n\n"
-            "Return:\n"
-            "    Contour lines (open line strips and closed line loops) as one or more sequences "
-            "of numpy arrays. The exact format is determined by the ``line_type`` used by the "
-            "``ContourGenerator``.")
+        .def("create_contour", &contourpy::ContourGenerator::lines, create_contour_doc, "level"_a)
+        .def("create_filled_contour", &contourpy::ContourGenerator::filled,
+             create_filled_contour_doc, "lower_level"_a, "upper_level"_a)
+        .def("filled", &contourpy::ContourGenerator::filled, filled_doc,
+             "lower_level"_a, "upper_level"_a)
+        .def("lines", &contourpy::ContourGenerator::lines, lines_doc, "level"_a)
+        .def("multi_filled", &contourpy::ContourGenerator::multi_filled, multi_filled_doc,
+             "levels"_a)
+        .def("multi_lines", &contourpy::ContourGenerator::multi_lines, multi_lines_doc, "levels"_a)
         .def_property_readonly(
             "chunk_count", [](py::object /* self */) {return py::make_tuple(1, 1);},
-            "Return tuple of (y, x) chunk counts.")
+            chunk_count_doc)
         .def_property_readonly(
-            "chunk_size", [](py::object /* self */) {return py::make_tuple(1, 1);},
-            "Return tuple of (y, x) chunk sizes.")
+            "chunk_size", [](py::object /* self */) {return py::make_tuple(1, 1);}, chunk_size_doc)
         .def_property_readonly(
-            "corner_mask", [](py::object /* self */) {return false;},
-            "Return whether ``corner_mask`` is set or not.")
+            "corner_mask", [](py::object /* self */) {return false;}, corner_mask_doc)
         .def_property_readonly(
             "fill_type", [](py::object /* self */) {return contourpy::FillType::OuterOffset;},
-            "Return the ``FillType``.")
+            fill_type_doc)
         .def_property_readonly(
             "line_type", [](py::object /* self */) {return contourpy::LineType::Separate;},
-            "Return the ``LineType``.")
+            line_type_doc)
         .def_property_readonly(
-            "quad_as_tri", [](py::object /* self */) {return false;},
-            "Return whether ``quad_as_tri`` is set or not.")
+            "quad_as_tri", [](py::object /* self */) {return false;}, quad_as_tri_doc)
         .def_property_readonly(
-            "thread_count", [](py::object /* self */) {return 1;},
-            "Return the number of threads used.")
+            "thread_count", [](py::object /* self */) {return 1;}, thread_count_doc)
         .def_property_readonly(
             "z_interp", [](py::object /* self */) {return contourpy::ZInterp::Linear;},
-            "Return the ``ZInterp``.")
+            z_interp_doc)
         .def_property_readonly_static(
             "default_fill_type",
             [](py::object /* self */) {return contourpy::FillType::OuterOffset;},
-            "Return the default ``FillType`` used by this algorithm.")
+            default_fill_type_doc)
         .def_property_readonly_static(
             "default_line_type", [](py::object /* self */) {return contourpy::LineType::Separate;},
-            "Return the default ``LineType`` used by this algorithm.")
-        .def_static(
-            "supports_corner_mask", []() {return false;},
-            "Return whether this algorithm supports ``corner_mask``.")
+            default_line_type_doc)
+        .def_static("supports_corner_mask", []() {return false;}, supports_corner_mask_doc)
         .def_static(
             "supports_fill_type", [](contourpy::FillType /* fill_type */) {return false;},
-            "Return whether this algorithm supports a particular ``FillType``.")
+            "fill_type"_a, supports_fill_type_doc)
         .def_static(
             "supports_line_type", [](contourpy::LineType /* line_type */) {return false;},
-            "Return whether this algorithm supports a particular ``LineType``.")
-        .def_static(
-            "supports_quad_as_tri", []() {return false;},
-            "Return whether this algorithm supports ``quad_as_tri``.")
-        .def_static(
-            "supports_threads", []() {return false;},
-            "Return whether this algorithm supports the use of threads.")
-        .def_static(
-            "supports_z_interp", []() {return false;},
-            "Return whether this algorithm supports ``z_interp`` values other than "
-            "``ZInterp.Linear`` which all support.");
+            "line_type"_a, supports_line_type_doc)
+        .def_static("supports_quad_as_tri", []() {return false;}, supports_quad_as_tri_doc)
+        .def_static("supports_threads", []() {return false;}, supports_threads_doc)
+        .def_static("supports_z_interp", []() {return false;}, supports_z_interp_doc);
 
     py::class_<contourpy::Mpl2005ContourGenerator, contourpy::ContourGenerator>(
         m, "Mpl2005ContourGenerator",
@@ -161,35 +232,30 @@ PYBIND11_MODULE(_contourpy, m) {
                       const contourpy::MaskArray&,
                       contourpy::index_t,
                       contourpy::index_t>(),
-             py::arg("x"),
-             py::arg("y"),
-             py::arg("z"),
-             py::arg("mask"),
-             py::kw_only(),
-             py::arg("x_chunk_size") = 0,
-             py::arg("y_chunk_size") = 0)
-        .def("create_contour", &contourpy::Mpl2005ContourGenerator::lines,
-            "Synonym for :func:`~contourpy.Mpl2005ContourGenerator.lines` to provide backward "
-            "compatibility with Matplotlib.")
-        .def("create_filled_contour", &contourpy::Mpl2005ContourGenerator::filled,
-            "Synonym for :func:`~contourpy.Mpl2005ContourGenerator.filled` to provide backward "
-            "compatibility with Matplotlib.")
-        .def("filled", &contourpy::Mpl2005ContourGenerator::filled)
-        .def("lines", &contourpy::Mpl2005ContourGenerator::lines)
-        .def_property_readonly("chunk_count", &contourpy::Mpl2005ContourGenerator::get_chunk_count)
-        .def_property_readonly("chunk_size", &contourpy::Mpl2005ContourGenerator::get_chunk_size)
-        .def_property_readonly("fill_type", [](py::object /* self */) {return mpl20xx_fill_type;})
-        .def_property_readonly("line_type", [](py::object /* self */) {return mpl20xx_line_type;})
+             "x"_a, "y"_a, "z"_a, "mask"_a, py::kw_only(), "x_chunk_size"_a = 0,
+             "y_chunk_size"_a = 0)
+        .def_property_readonly(
+            "chunk_count", &contourpy::Mpl2005ContourGenerator::get_chunk_count, chunk_count_doc)
+        .def_property_readonly(
+            "chunk_size", &contourpy::Mpl2005ContourGenerator::get_chunk_size, chunk_size_doc)
+        .def_property_readonly(
+            "fill_type", [](py::object /* self */) {return mpl20xx_fill_type;}, fill_type_doc)
+        .def_property_readonly(
+            "line_type", [](py::object /* self */) {return mpl20xx_line_type;}, line_type_doc)
         .def_property_readonly_static(
-            "default_fill_type", [](py::object /* self */) {return mpl20xx_fill_type;})
+            "default_fill_type", [](py::object /* self */) {return mpl20xx_fill_type;},
+            default_fill_type_doc)
         .def_property_readonly_static(
-            "default_line_type", [](py::object /* self */) {return mpl20xx_line_type;})
+            "default_line_type", [](py::object /* self */) {return mpl20xx_line_type;},
+            default_line_type_doc)
         .def_static(
             "supports_fill_type",
-            [](contourpy::FillType fill_type) {return fill_type == mpl20xx_fill_type;})
+            [](contourpy::FillType fill_type) {return fill_type == mpl20xx_fill_type;},
+            supports_fill_type_doc)
         .def_static(
             "supports_line_type",
-            [](contourpy::LineType line_type) {return line_type == mpl20xx_line_type;});
+            [](contourpy::LineType line_type) {return line_type == mpl20xx_line_type;},
+            supports_line_type_doc);
 
     py::class_<contourpy::mpl2014::Mpl2014ContourGenerator, contourpy::ContourGenerator>(
         m, "Mpl2014ContourGenerator",
@@ -210,41 +276,36 @@ PYBIND11_MODULE(_contourpy, m) {
                       bool,
                       contourpy::index_t,
                       contourpy::index_t>(),
-             py::arg("x"),
-             py::arg("y"),
-             py::arg("z"),
-             py::arg("mask"),
-             py::kw_only(),
-             py::arg("corner_mask"),
-             py::arg("x_chunk_size") = 0,
-             py::arg("y_chunk_size") = 0)
-        .def("create_contour", &contourpy::mpl2014::Mpl2014ContourGenerator::lines,
-            "Synonym for :func:`~contourpy.Mpl2014ContourGenerator.lines` to provide backward "
-            "compatibility with Matplotlib.")
-        .def("create_filled_contour", &contourpy::mpl2014::Mpl2014ContourGenerator::filled,
-            "Synonym for :func:`~contourpy.Mpl2014ContourGenerator.filled` to provide backward "
-            "compatibility with Matplotlib.")
-        .def("filled", &contourpy::mpl2014::Mpl2014ContourGenerator::filled)
-        .def("lines", &contourpy::mpl2014::Mpl2014ContourGenerator::lines)
+             "x"_a, "y"_a, "z"_a, "mask"_a, py::kw_only(), "corner_mask"_a, "x_chunk_size"_a = 0,
+             "y_chunk_size"_a = 0)
         .def_property_readonly(
-            "chunk_count", &contourpy::mpl2014::Mpl2014ContourGenerator::get_chunk_count)
+            "chunk_count", &contourpy::mpl2014::Mpl2014ContourGenerator::get_chunk_count,
+            chunk_count_doc)
         .def_property_readonly(
-            "chunk_size", &contourpy::mpl2014::Mpl2014ContourGenerator::get_chunk_size)
+            "chunk_size", &contourpy::mpl2014::Mpl2014ContourGenerator::get_chunk_size,
+            chunk_size_doc)
         .def_property_readonly(
-            "corner_mask", &contourpy::mpl2014::Mpl2014ContourGenerator::get_corner_mask)
-        .def_property_readonly("fill_type", [](py::object /* self */) {return mpl20xx_fill_type;})
-        .def_property_readonly("line_type", [](py::object /* self */) {return mpl20xx_line_type;})
+            "corner_mask", &contourpy::mpl2014::Mpl2014ContourGenerator::get_corner_mask,
+            corner_mask_doc)
+        .def_property_readonly(
+            "fill_type", [](py::object /* self */) {return mpl20xx_fill_type;}, fill_type_doc)
+        .def_property_readonly(
+            "line_type", [](py::object /* self */) {return mpl20xx_line_type;}, line_type_doc)
         .def_property_readonly_static(
-            "default_fill_type", [](py::object /* self */) {return mpl20xx_fill_type;})
+            "default_fill_type", [](py::object /* self */) {return mpl20xx_fill_type;},
+            default_fill_type_doc)
         .def_property_readonly_static(
-            "default_line_type", [](py::object /* self */) {return mpl20xx_line_type;})
-        .def_static("supports_corner_mask", []() {return true;})
+            "default_line_type", [](py::object /* self */) {return mpl20xx_line_type;},
+            default_line_type_doc)
+        .def_static("supports_corner_mask", []() {return true;}, supports_corner_mask_doc)
         .def_static(
             "supports_fill_type",
-            [](contourpy::FillType fill_type) {return fill_type == mpl20xx_fill_type;})
+            [](contourpy::FillType fill_type) {return fill_type == mpl20xx_fill_type;},
+            supports_fill_type_doc)
         .def_static(
             "supports_line_type",
-            [](contourpy::LineType line_type) {return line_type == mpl20xx_line_type;});
+            [](contourpy::LineType line_type) {return line_type == mpl20xx_line_type;},
+            supports_line_type_doc);
 
     py::class_<contourpy::SerialContourGenerator, contourpy::ContourGenerator>(
         m, "SerialContourGenerator",
@@ -263,44 +324,45 @@ PYBIND11_MODULE(_contourpy, m) {
                       contourpy::ZInterp,
                       contourpy::index_t,
                       contourpy::index_t>(),
-             py::arg("x"),
-             py::arg("y"),
-             py::arg("z"),
-             py::arg("mask"),
-             py::kw_only(),
-             py::arg("corner_mask"),
-             py::arg("line_type"),
-             py::arg("fill_type"),
-             py::arg("quad_as_tri"),
-             py::arg("z_interp"),
-             py::arg("x_chunk_size") = 0,
-             py::arg("y_chunk_size") = 0)
+             "x"_a, "y"_a, "z"_a, "mask"_a, py::kw_only(), "corner_mask"_a, "line_type"_a,
+             "fill_type"_a, "quad_as_tri"_a, "z_interp"_a, "x_chunk_size"_a = 0,
+             "y_chunk_size"_a = 0)
         .def("_write_cache", &contourpy::SerialContourGenerator::write_cache)
-        .def("create_contour", &contourpy::SerialContourGenerator::lines)
-        .def("create_filled_contour", &contourpy::SerialContourGenerator::filled)
-        .def("filled", &contourpy::SerialContourGenerator::filled)
-        .def("lines", &contourpy::SerialContourGenerator::lines)
-        .def_property_readonly("chunk_count", &contourpy::SerialContourGenerator::get_chunk_count)
-        .def_property_readonly("chunk_size", &contourpy::SerialContourGenerator::get_chunk_size)
-        .def_property_readonly("corner_mask", &contourpy::SerialContourGenerator::get_corner_mask)
-        .def_property_readonly("fill_type", &contourpy::SerialContourGenerator::get_fill_type)
-        .def_property_readonly("line_type", &contourpy::SerialContourGenerator::get_line_type)
-        .def_property_readonly("quad_as_tri", &contourpy::SerialContourGenerator::get_quad_as_tri)
-        .def_property_readonly("z_interp", &contourpy::SerialContourGenerator::get_z_interp)
-        .def_property_readonly_static("default_fill_type", [](py::object /* self */) {
-            return contourpy::SerialContourGenerator::default_fill_type();})
-        .def_property_readonly_static("default_line_type", [](py::object /* self */) {
-            return contourpy::SerialContourGenerator::default_line_type();})
-        .def_static("supports_corner_mask", []() {return true;})
-        .def_static("supports_fill_type", &contourpy::SerialContourGenerator::supports_fill_type)
-        .def_static("supports_line_type", &contourpy::SerialContourGenerator::supports_line_type)
-        .def_static("supports_quad_as_tri", []() {return true;})
-        .def_static("supports_z_interp", []() {return true;});
+        .def_property_readonly(
+            "chunk_count", &contourpy::SerialContourGenerator::get_chunk_count, chunk_count_doc)
+        .def_property_readonly(
+            "chunk_size", &contourpy::SerialContourGenerator::get_chunk_size, chunk_size_doc)
+        .def_property_readonly(
+            "corner_mask", &contourpy::SerialContourGenerator::get_corner_mask, corner_mask_doc)
+        .def_property_readonly(
+            "fill_type", &contourpy::SerialContourGenerator::get_fill_type, fill_type_doc)
+        .def_property_readonly(
+            "line_type", &contourpy::SerialContourGenerator::get_line_type, line_type_doc)
+        .def_property_readonly(
+            "quad_as_tri", &contourpy::SerialContourGenerator::get_quad_as_tri, quad_as_tri_doc)
+        .def_property_readonly(
+            "z_interp", &contourpy::SerialContourGenerator::get_z_interp, z_interp_doc)
+        .def_property_readonly_static(
+            "default_fill_type",
+            [](py::object /* self */) {return contourpy::SerialContourGenerator::default_fill_type();},
+            default_fill_type_doc)
+        .def_property_readonly_static("default_line_type",
+            [](py::object /* self */) {return contourpy::SerialContourGenerator::default_line_type();},
+            default_line_type_doc)
+        .def_static("supports_corner_mask", []() {return true;}, supports_corner_mask_doc)
+        .def_static(
+            "supports_fill_type", &contourpy::SerialContourGenerator::supports_fill_type,
+            supports_fill_type_doc)
+        .def_static(
+            "supports_line_type", &contourpy::SerialContourGenerator::supports_line_type,
+            supports_line_type_doc)
+        .def_static("supports_quad_as_tri", []() {return true;}, supports_quad_as_tri_doc)
+        .def_static("supports_z_interp", []() {return true;}, supports_z_interp_doc);
 
     py::class_<contourpy::ThreadedContourGenerator, contourpy::ContourGenerator>(
         m, "ThreadedContourGenerator",
         "ContourGenerator corresponding to ``name=\"threaded\"``, the multithreaded version of "
-        ":class:`~contourpy._contourpy.SerialContourGenerator`.\n\n"
+        ":class:`~.SerialContourGenerator`.\n\n"
         "Supports ``corner_mask``, ``quad_as_tri`` and ``z_interp`` and ``threads``. "
         "Supports all options for ``line_type`` and ``fill_type``.")
         .def(py::init<const contourpy::CoordinateArray&,
@@ -315,45 +377,43 @@ PYBIND11_MODULE(_contourpy, m) {
                       contourpy::index_t,
                       contourpy::index_t,
                       contourpy::index_t>(),
-             py::arg("x"),
-             py::arg("y"),
-             py::arg("z"),
-             py::arg("mask"),
-             py::kw_only(),
-             py::arg("corner_mask"),
-             py::arg("line_type"),
-             py::arg("fill_type"),
-             py::arg("quad_as_tri"),
-             py::arg("z_interp"),
-             py::arg("x_chunk_size") = 0,
-             py::arg("y_chunk_size") = 0,
-             py::arg("thread_count") = 0)
+             "x"_a, "y"_a, "z"_a, "mask"_a, py::kw_only(), "corner_mask"_a, "line_type"_a,
+             "fill_type"_a, "quad_as_tri"_a, "z_interp"_a, "x_chunk_size"_a = 0,
+             "y_chunk_size"_a = 0, "thread_count"_a = 0)
         .def("_write_cache", &contourpy::ThreadedContourGenerator::write_cache)
-        .def("create_contour", &contourpy::ThreadedContourGenerator::lines,
-            "Synonym for :func:`~contourpy.ThreadedContourGenerator.lines` to provide backward "
-            "compatibility with Matplotlib.")
-        .def("create_filled_contour", &contourpy::ThreadedContourGenerator::filled,
-            "Synonym for :func:`~contourpy.ThreadedContourGenerator.filled` to provide backward "
-            "compatibility with Matplotlib.")
-        .def("filled", &contourpy::ThreadedContourGenerator::filled)
-        .def("lines", &contourpy::ThreadedContourGenerator::lines)
-        .def_property_readonly("chunk_count", &contourpy::ThreadedContourGenerator::get_chunk_count)
-        .def_property_readonly("chunk_size", &contourpy::ThreadedContourGenerator::get_chunk_size)
-        .def_property_readonly("corner_mask", &contourpy::ThreadedContourGenerator::get_corner_mask)
-        .def_property_readonly("fill_type", &contourpy::ThreadedContourGenerator::get_fill_type)
-        .def_property_readonly("line_type", &contourpy::ThreadedContourGenerator::get_line_type)
-        .def_property_readonly("quad_as_tri", &contourpy::ThreadedContourGenerator::get_quad_as_tri)
         .def_property_readonly(
-            "thread_count", &contourpy::ThreadedContourGenerator::get_thread_count)
-        .def_property_readonly("z_interp", &contourpy::ThreadedContourGenerator::get_z_interp)
-        .def_property_readonly_static("default_fill_type", [](py::object /* self */) {
-            return contourpy::ThreadedContourGenerator::default_fill_type();})
-        .def_property_readonly_static("default_line_type", [](py::object /* self */) {
-            return contourpy::ThreadedContourGenerator::default_line_type();})
-        .def_static("supports_corner_mask", []() {return true;})
-        .def_static("supports_fill_type", &contourpy::ThreadedContourGenerator::supports_fill_type)
-        .def_static("supports_line_type", &contourpy::ThreadedContourGenerator::supports_line_type)
-        .def_static("supports_quad_as_tri", []() {return true;})
-        .def_static("supports_threads", []() {return true;})
-        .def_static("supports_z_interp", []() {return true;});
+            "chunk_count", &contourpy::ThreadedContourGenerator::get_chunk_count, chunk_count_doc)
+        .def_property_readonly(
+            "chunk_size", &contourpy::ThreadedContourGenerator::get_chunk_size, chunk_size_doc)
+        .def_property_readonly(
+            "corner_mask", &contourpy::ThreadedContourGenerator::get_corner_mask, corner_mask_doc)
+        .def_property_readonly(
+            "fill_type", &contourpy::ThreadedContourGenerator::get_fill_type, fill_type_doc)
+        .def_property_readonly(
+            "line_type", &contourpy::ThreadedContourGenerator::get_line_type, line_type_doc)
+        .def_property_readonly(
+            "quad_as_tri", &contourpy::ThreadedContourGenerator::get_quad_as_tri, quad_as_tri_doc)
+        .def_property_readonly(
+            "thread_count", &contourpy::ThreadedContourGenerator::get_thread_count,
+            thread_count_doc)
+        .def_property_readonly(
+            "z_interp", &contourpy::ThreadedContourGenerator::get_z_interp, z_interp_doc)
+        .def_property_readonly_static(
+            "default_fill_type",
+            [](py::object /* self */) {return contourpy::ThreadedContourGenerator::default_fill_type();},
+            default_fill_type_doc)
+        .def_property_readonly_static(
+            "default_line_type",
+            [](py::object /* self */) {return contourpy::ThreadedContourGenerator::default_line_type();},
+            default_line_type_doc)
+        .def_static("supports_corner_mask", []() {return true;}, supports_corner_mask_doc)
+        .def_static(
+            "supports_fill_type", &contourpy::ThreadedContourGenerator::supports_fill_type,
+            supports_fill_type_doc)
+        .def_static(
+            "supports_line_type", &contourpy::ThreadedContourGenerator::supports_line_type,
+            supports_line_type_doc)
+        .def_static("supports_quad_as_tri", []() {return true;}, supports_quad_as_tri_doc)
+        .def_static("supports_threads", []() {return true;}, supports_threads_doc)
+        .def_static("supports_z_interp", []() {return true;}, supports_z_interp_doc);
 }

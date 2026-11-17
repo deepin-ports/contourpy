@@ -24,10 +24,12 @@ template <typename Derived>
 class BaseContourGenerator : public ContourGenerator
 {
 public:
-    ~BaseContourGenerator();
+    virtual ~BaseContourGenerator();
 
     static FillType default_fill_type();
     static LineType default_line_type();
+
+    py::tuple filled(double lower_level, double upper_level) override;
 
     py::tuple get_chunk_count() const;  // Return (y_chunk_count, x_chunk_count)
     py::tuple get_chunk_size() const;   // Return (y_chunk_size, x_chunk_size)
@@ -41,8 +43,10 @@ public:
 
     ZInterp get_z_interp() const;
 
-    py::sequence filled(double lower_level, double upper_level);
-    py::sequence lines(double level);
+    py::sequence lines(double level) override;
+
+    py::list multi_filled(const LevelArray levels) override;
+    py::list multi_lines(const LevelArray levels) override;
 
     static bool supports_fill_type(FillType fill_type);
     static bool supports_line_type(LineType line_type);
@@ -85,11 +89,11 @@ protected:
         bool is_upper, on_boundary;
     };
 
-    // Calculate and return z at middle of quad.
-    double calc_middle_z(index_t quad) const;
-
     // Calculate, set and return z-level at middle of quad.
     ZLevel calc_and_set_middle_z_level(index_t quad);
+
+    // Calculate and return z at middle of quad.
+    double calc_middle_z(index_t quad) const;
 
     void closed_line(const Location& start_location, OuterOrHole outer_or_hole, ChunkLocal& local);
 
@@ -149,8 +153,6 @@ protected:
     void interp(
         index_t point0, double x1, double y1, double z1, bool is_upper, double*& points) const;
 
-    bool is_filled() const;
-
     bool is_point_in_chunk(index_t point, const ChunkLocal& local) const;
 
     bool is_quad_in_bounds(
@@ -165,6 +167,10 @@ protected:
     py::sequence march_wrapper();
 
     void move_to_next_boundary_edge(index_t& quad, index_t& forward, index_t& left) const;
+
+    // Common initialisation for filled/multi_filled and lines/multi_lines calls.
+    void pre_filled();
+    void pre_lines();
 
     void set_look_flags(index_t hole_start_quad);
 
@@ -202,6 +208,7 @@ private:
     bool _direct_line_offsets;        // Whether line offsets array is written direct to Python.
     bool _direct_outer_offsets;       // Whether outer offsets array is written direct to Python.
     bool _outer_offsets_into_points;  // Otherwise into line offsets.  Only used if _identify_holes.
+    bool _nan_separated;              // Whether adjacent lines' points are separated by nans.
     unsigned int _return_list_count;
 };
 

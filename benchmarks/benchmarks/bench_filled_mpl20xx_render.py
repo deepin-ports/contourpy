@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from asv_runner.benchmarks.mark import SkipNotImplemented
+
 from contourpy import FillType, contour_generator
 from contourpy.util.mpl_renderer import MplTestRenderer
 
@@ -16,19 +18,17 @@ class BenchFilledMpl20xxRender(BenchBase):
     def setup(
         self, name: str, dataset: str, fill_type: FillType, corner_mask: str | bool, n: int,
     ) -> None:
+        if name == "mpl2005" and corner_mask is True:
+            raise SkipNotImplemented(f"{name} does not support corner_mask={corner_mask}")
         self.set_xyz_and_levels(dataset, n, corner_mask != "no mask")
 
     def time_filled_mpl20xx_render(
         self, name: str, dataset: str, fill_type: FillType, corner_mask: str | bool, n: int,
     ) -> None:
-        if name == "mpl2005" and corner_mask is True:
-            raise NotImplementedError  # Does not support corner_mask=True
         cont_gen = contour_generator(
             self.x, self.y, self.z, name=name, fill_type=fill_type,
             corner_mask=corner_mask_to_bool(corner_mask),
         )
         renderer = MplTestRenderer()
-        for i in range(len(self.levels)-1):
-            filled = cont_gen.filled(self.levels[i], self.levels[i+1])
-            renderer.filled(filled, fill_type, color=f"C{i}")
+        renderer.multi_filled(cont_gen.multi_filled(self.levels), fill_type)
         renderer.save(f"filled_{name}_{corner_mask}_{fill_type}_{n}.png")

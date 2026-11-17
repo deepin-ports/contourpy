@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -8,6 +8,9 @@ from contourpy import FillType, LineType, ZInterp
 from contourpy.enum_util import as_fill_type, as_line_type, as_z_interp
 
 from . import util_test
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @pytest.mark.parametrize("name, value", util_test.all_fill_types_str_value())
@@ -60,6 +63,6 @@ def test_string_to_enum(
         line_type = from_string_function(name)
         assert line_type == enum
 
-    msg = "'unknown'"
-    with pytest.raises(KeyError, match=msg):
+    msg = "'unknown' is not a valid"
+    with pytest.raises(ValueError, match=msg):
         _ = from_string_function("unknown")

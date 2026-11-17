@@ -11,12 +11,16 @@ import numpy as np
 from contourpy import FillType, LineType, contour_generator
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
-    import numpy.typing as npt
 
     from contourpy._contourpy import (
-        CoordinateArray, FillReturn_OuterCode, LineReturn_SeparateCode, MaskArray,
+        CoordinateArray,
+        FillReturn_OuterCode,
+        LineReturn_SeparateCode,
+        MaskArray,
     )
 
 
@@ -40,13 +44,13 @@ class Config:
     show_text: bool
 
     arrowsize: float
-    axes: npt.NDArray[Axes]  # Set in derived classes.
+    axes: Sequence[Axes]  # Set in derived classes.
     axes_index: int
     fill_alpha: float
-    fig: Figure  # Set in derived classes.
+    fig: Figure | None  # Set in derived classes.
     fontsize: float
     gap: float
-    grid_kwargs: dict[str, str | float]
+    grid_kwargs: dict[str, Any]
     mask: MaskArray | Literal[False]
     marker_size: float
     text_gap: float
@@ -68,18 +72,17 @@ class Config:
         self.marker_size = 3.5
         self.gap = 0.1
         self.text_gap = self.gap/2
-        self.grid_kwargs = dict(color="gray", linewidth=0.35)
+        self.grid_kwargs = {"color": "gray", "linewidth": 0.35}
         self.fill_alpha = 0.2
 
         self.x, self.y = np.meshgrid([0.0, 1.0], [0.0, 1.0])
         self.mask = False
 
-        import matplotlib
-        matplotlib.use("Agg")
+        import matplotlib as mpl
+        mpl.use("Agg")
 
     def __del__(self) -> None:
-        if self.fig:
-            plt.close(self.fig)
+        self.clear()
 
     def _arrow(
         self, ax: Axes, line_start: CoordinateArray, line_end: CoordinateArray, color: str,
@@ -157,13 +160,13 @@ class Config:
             # Text for corner and optional middle z-levels.
             fontsize = self.fontsize
             if corner != Corner.NW:
-                ax.text(1+self.text_gap, 0, se, va="center", size=fontsize, ha="left")
+                ax.text(1+self.text_gap, 0, str(se), va="center", size=fontsize, ha="left")
             if corner != Corner.SW:
-                ax.text(1+self.text_gap, 1, ne, va="center", size=fontsize, ha="left")
+                ax.text(1+self.text_gap, 1, str(ne), va="center", size=fontsize, ha="left")
             if corner != Corner.NE:
-                ax.text(-self.text_gap, 0, sw, va="center", size=fontsize, ha="right")
+                ax.text(-self.text_gap, 0, str(sw), va="center", size=fontsize, ha="right")
             if corner != Corner.SE:
-                ax.text(-self.text_gap, 1, nw, va="center", size=fontsize, ha="right")
+                ax.text(-self.text_gap, 1, str(nw), va="center", size=fontsize, ha="right")
             if suffix:  # Suffix (without brackets) is the z-level of quad middle.
                 ax.text(0.5, 0.5, suffix[1:-1], va="center", size=fontsize, ha="center")
 
@@ -197,7 +200,7 @@ class Config:
                     raise RuntimeError(
                         f"Inconsistent zupper {zupper} for config {config}{suffix} with middle_z "
                         f"{zmean}")
-            elif suffix != "":
+            else:
                 raise RuntimeError(f"Unexpected suffix {suffix} for config {config}")
 
         self._quad_lines(ax, z_masked, zlower, zupper, corner)
@@ -209,15 +212,25 @@ class Config:
         else:
             self.mask = np.zeros(4, dtype=bool)
             self.mask[corner.value] = True
-            self.mask.shape = (2, 2)
+            self.mask.reshape((2, 2))
+
+    def clear(self) -> None:
+        if self.fig:
+            self.axes = []
+            plt.close(self.fig)
+            self.fig = None
 
     def save_to_buffer(self) -> io.BytesIO:
+        if not self.fig:
+            raise RuntimeError("self.fig not set")
         buf = io.BytesIO()
         self.fig.savefig(buf, format="png")
         buf.seek(0)
         return buf
 
     def save_to_file(self, filename: str) -> None:
+        if not self.fig:
+            raise RuntimeError("self.fig not set")
         self.fig.savefig(filename)
 
 
@@ -244,7 +257,7 @@ class ConfigFilledCommon(Config):
             else:  # Corner.SE
                 [nw, ne, sw, se] = [None, a, b, c]
         if nw == 3 or ne == 3 or sw == 3 or se == 3:
-            raise ValueError("Invalid config")
+            raise ValueError(f"Invalid config {config}")
         return nw, ne, sw, se
 
     def _quad_lines(
@@ -370,7 +383,7 @@ class ConfigFilled(ConfigFilledCommon):
     def __init__(self, name: str, quad_as_tri: bool = False, show_text: bool = True) -> None:
         super().__init__(name, False, quad_as_tri, show_text)
 
-        subplot_kw = dict(aspect="equal")
+        subplot_kw = {"aspect": "equal"}
         if self.quad_as_tri:
             self.fig, axes = plt.subplots(18, 12, figsize=(10.4, 17.1), subplot_kw=subplot_kw)
         else:
@@ -407,7 +420,7 @@ class ConfigFilled(ConfigFilledCommon):
                         self._next_quad(config, suffix="(1)", set_0=lookup_1[zsum])
                     elif zmin == 0 and zmax == 2:
                         count_1 = np.count_nonzero(all == 1)
-                        lookup_0 = {2: -0.3, 3: -1, 4: -2-count_1/2, 5: -5, 6: -6}
+                        lookup_0 = {2: -0.3, 3: -1, 4: -2-count_1/2, 5: -5, 6: -6}  # type: ignore[dict-item]
                         self._next_quad(config, suffix="(0)", set_0=lookup_0[zsum])
 
                         if zsum <= 3:
@@ -418,13 +431,13 @@ class ConfigFilled(ConfigFilledCommon):
                             self._next_quad(config, suffix="(1)", set_0=-1)
 
                         lookup_2 = {2: 8.01, 3: 7.01, 4: 4+count_1/2, 5: 3.5, 6: 2.5}
-                        self._next_quad(config, suffix="(2)", set_2=lookup_2[zsum])
+                        self._next_quad(config, suffix="(2)", set_2=lookup_2[zsum])  # type: ignore[arg-type]
                     elif zmin == 1 and zmax == 2:
                         lookup_1 = {5: 2, 6: 1.65, 7: 1.6}
                         self._next_quad(config, suffix="(1)", set_2=lookup_1[zsum])
 
                         lookup_2 = {5: 4, 6: 3, 7: 2}
-                        self._next_quad(config, suffix="(2)", set_2=lookup_2[zsum])
+                        self._next_quad(config, suffix="(2)", set_2=lookup_2[zsum])  # type: ignore[arg-type]
                     else:
                         raise RuntimeError(f"Invalid combination of zmin {zmin} and zmax {zmax}")
                 else:
@@ -536,7 +549,7 @@ class ConfigLines(ConfigLinesCommon):
     def __init__(self, name: str, quad_as_tri: bool = False, show_text: bool = True) -> None:
         super().__init__(name, False, quad_as_tri, show_text)
 
-        subplot_kw = dict(aspect="equal")
+        subplot_kw = {"aspect": "equal"}
         if self.quad_as_tri:
             self.fig, axes = plt.subplots(5, 6, figsize=(5.2, 4.75), subplot_kw=subplot_kw)
         else:

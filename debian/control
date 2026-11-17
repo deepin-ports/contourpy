@@ -1,28 +1,35 @@
 Source: contourpy
 Section: python
-Priority: optional
-Maintainer: Debian Python Team <team+python@tracker.debian.org>,
-Uploaders: Emmanuel Arias <eamanu@debian.org>,
-Build-Depends: debhelper-compat (= 13),
-               pybuild-plugin-pyproject,
-               python3-all-dev,
-               python3-matplotlib <!nocheck>,
-               python3-numpy <!nocheck>,
-               python3-pybind11,
-               python3-pytest <!nocheck>,
-               python3-setuptools,
-Standards-Version: 4.6.2.0
+Maintainer: Debian Python Team <team+python@tracker.debian.org>
+Uploaders:
+ Alexandre Detiste <tchet@debian.org>,
+ Emmanuel Arias <eamanu@debian.org>,
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-python (>= 7.20261019),
+ dh-sequence-python3,
+ pybuild-plugin-pyproject,
+ python3-all-dev,
+ python3-matplotlib <!nocheck>,
+ python3-mesonpy,
+ python3-numpy <!nocheck>,
+ python3-pkgconfig,
+ python3-pybind11,
+ python3-pytest <!nocheck>,
+ python3-wurlitzer <!nocheck>,
+Standards-Version: 4.7.4
 Testsuite: autopkgtest-pkg-pybuild
 Homepage: https://contourpy.readthedocs.io/
 Vcs-Git: https://salsa.debian.org/python-team/packages/contourpy.git
 Vcs-Browser: https://salsa.debian.org/python-team/packages/contourpy
-Rules-Requires-Root: no
+X-Style: black
 
 Package: python3-contourpy
 Architecture: any
-Depends: ${misc:Depends},
-         ${python3:Depends},
-         ${shlibs:Depends},
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ ${shlibs:Depends},
 Description: Python library for calculating contours of 2D quadrilateral grids
  ContourPy is a Python library for calculating contours of 2D quadrilateral
  grids. It is written in C++11 and wrapped using pybind11.
